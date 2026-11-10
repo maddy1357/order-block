@@ -175,27 +175,37 @@
     const nearestAbove = (arr, x) => arr.filter(p => p > x + gap).reduce((m, p) => Math.min(m, p), Infinity);
     const nearestBelow = (arr, x) => arr.filter(p => p < x - gap).reduce((m, p) => Math.max(m, p), -Infinity);
 
-    let resistance, support, liquidity;
+    const or = (v, fallback) => (isFinite(v) ? v : fallback);
+    let resistance, support, liquidity, target2, stop, target;
     if (bias === 'bull') {
-      resistance = nearestAbove(highs, ltp);
-      if (!isFinite(resistance)) resistance = ltp + 1.5 * a;
-      support = nearestBelow(lows, ob.bottom);
-      if (!isFinite(support)) support = ob.bottom - a;
-      liquidity = nearestBelow(lows, support);
-      if (!isFinite(liquidity)) liquidity = support - a;
+      resistance = or(nearestAbove(highs, ltp), ltp + 1.5 * a);
+      target2 = or(nearestAbove(highs, resistance), resistance + a);
+      support = or(nearestBelow(lows, ob.bottom), ob.bottom - a);
+      liquidity = or(nearestBelow(lows, support), support - a);
+      stop = ob.bottom - 0.1 * a;
+      target = resistance;
     } else {
-      support = nearestBelow(lows, ltp);
-      if (!isFinite(support)) support = ltp - 1.5 * a;
-      resistance = nearestAbove(highs, ob.top);
-      if (!isFinite(resistance)) resistance = ob.top + a;
-      liquidity = nearestAbove(highs, resistance);
-      if (!isFinite(liquidity)) liquidity = resistance + a;
+      support = or(nearestBelow(lows, ltp), ltp - 1.5 * a);
+      target2 = or(nearestBelow(lows, support), support - a);
+      resistance = or(nearestAbove(highs, ob.top), ob.top + a);
+      liquidity = or(nearestAbove(highs, resistance), resistance + a);
+      stop = ob.top + 0.1 * a;
+      target = support;
     }
+    // Risk/reward for a retest of the zone: enter at its near edge, stop beyond the far edge.
+    const entry = bias === 'bull' ? ob.top : ob.bottom;
+    const riskPts = Math.abs(entry - stop);
     return {
       resistance: tick(resistance),
       ob: { top: ob.top, bottom: ob.bottom },
       support: tick(support),
       liquidity: tick(liquidity),
+      // R2 for bullish setups, S2 for bearish ones
+      target2: tick(target2),
+      stop: tick(stop),
+      entry,
+      risk: riskPts / entry * 100,
+      rr: riskPts ? Math.abs(target - entry) / riskPts : 0,
     };
   }
 

@@ -42,7 +42,7 @@
       fg: cssVar('--text'), surface: cssVar('--surface'), border: cssVar('--border'),
       bull: cssVar('--bull-strong'), bear: cssVar('--bear-strong'),
       bullText: cssVar('--bull'), bearText: cssVar('--bear'),
-      liq: cssVar('--liq'), accent: cssVar('--accent'),
+      liq: cssVar('--liq'), accent: cssVar('--accent'), line: cssVar('--line'),
     };
   }
 

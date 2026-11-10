@@ -13,7 +13,7 @@
   const BOARD_SIZE = 20;
 
   const state = {
-    view: 'boards',
+    view: 'dashboard',
     sym: SYMBOLS[0],
     tf: 5,
     clock: null,
@@ -43,11 +43,15 @@
     state.clock = feed.update(now);
     for (const sym of SYMBOLS) {
       const c5 = aggregate(feed.minutes(sym), 5);
-      state.results.set(sym, { sym, sector: SECTOR[sym], ...OB.engine.analyze(c5) });
+      const a = OB.engine.analyze(c5);
+      const session = c5.filter(k => k.s === c5[c5.length - 1].s);
+      const path = session.map(k => (k.c / a.prevClose - 1) * 100);
+      state.results.set(sym, { sym, sector: SECTOR[sym], ...a, session, path });
     }
     state.lastUpdate = now;
     renderStatus();
     renderBoards();
+    if (state.view === 'dashboard') renderFlow();
     if (state.view === 'chart') renderChart(false);
     if (state.view === 'xray') renderXRay();
   }
@@ -72,6 +76,9 @@
     }[c.phase];
     pill.textContent = label;
     pill.className = 'pill' + (c.phase === 'live' ? ' live' : '');
+    const dot = $('#live-dot');
+    dot.classList.toggle('live', c.phase === 'live');
+    dot.title = label;
   }
 
   function renderClock() {
@@ -227,6 +234,62 @@
     renderChart(true);
   }
 
+  // ---------- Flow dashboard ----------
+  let flow = null;
+
+  function renderFlow() {
+    if (!flow) flow = new OB.FlowBoard($('#flow'), sym => go('chart', sym));
+    flow.update([...state.results.values()]);
+  }
+
+  // ---------- Search ----------
+  function initSearch() {
+    const input = $('#search');
+    const box = $('#search-results');
+    let items = [], active = 0;
+
+    const close = () => { box.hidden = true; input.setAttribute('aria-expanded', 'false'); };
+    const pick = sym => { input.value = ''; close(); input.blur(); go('chart', sym); };
+    const paint = () => {
+      box.querySelectorAll('.sr-item').forEach((n, i) => n.classList.toggle('active', i === active));
+      const cur = box.querySelector('.sr-item.active');
+      cur && cur.scrollIntoView({ block: 'nearest' });
+    };
+    const show = () => {
+      const q = input.value.trim().toUpperCase();
+      items = [...state.results.values()]
+        .filter(r => !q || r.sym.includes(q) || r.sector.toUpperCase().includes(q))
+        .sort((a, b) => (q ? b.sym.startsWith(q) - a.sym.startsWith(q) : 0) || b.liquidity - a.liquidity)
+        .slice(0, 12);
+      active = 0;
+      box.innerHTML = items.length ? items.map((r, i) => `
+        <div class="sr-item${i ? '' : ' active'}" role="option" data-pick="${esc(r.sym)}">
+          <span><b>${esc(r.sym)}</b><small>${r.sector} · ${r.buildup}</small></span>
+          <span class="sr-px">${fmtPx(r.ltp)}<br><span class="${cls(r.chg)}">${pct(r.chg)}</span></span>
+          <span class="sr-bias ${r.bias}">${r.bias === 'neutral' ? '—' : r.bias.toUpperCase()}</span>
+        </div>`).join('') : '<div class="sr-empty">No matching stocks</div>';
+      box.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    };
+
+    input.addEventListener('focus', show);
+    input.addEventListener('input', show);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(items.length - 1, active + 1); paint(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); paint(); }
+      else if (e.key === 'Enter' && items[active]) { e.preventDefault(); pick(items[active].sym); }
+      else if (e.key === 'Escape') { close(); input.blur(); }
+    });
+    box.addEventListener('mousedown', e => {
+      const it = e.target.closest('[data-pick]');
+      if (it) { e.preventDefault(); pick(it.dataset.pick); }
+    });
+    input.addEventListener('blur', () => setTimeout(close, 100));
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); input.focus(); input.select(); }
+    });
+  }
+
   // ---------- X-Ray ----------
   let xray = null;
 
@@ -362,11 +425,16 @@
   }
 
   function route() {
-    const [, view = 'boards', sym] = location.hash.split('/');
-    state.view = ['boards', 'chart', 'xray', 'journal'].includes(view) ? view : 'boards';
+    const [, view = 'dashboard', sym] = location.hash.split('/');
+    state.view = ['dashboard', 'boards', 'chart', 'xray', 'journal'].includes(view) ? view : 'dashboard';
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + state.view));
-    document.querySelectorAll('.tabs a').forEach(a => a.setAttribute('aria-selected', String(a.dataset.view === state.view)));
-    if (state.view === 'chart') {
+    document.querySelectorAll('.side-nav a').forEach(a => {
+      if (a.dataset.view === state.view) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    if (state.view === 'dashboard') {
+      requestAnimationFrame(renderFlow);
+    } else if (state.view === 'chart') {
       const s = sym ? decodeURIComponent(sym) : state.sym;
       state.sym = SYMBOLS.includes(s) ? s : state.sym;
       $('#sym-select').value = state.sym;
@@ -382,15 +450,19 @@
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
     try { localStorage.setItem('obs.theme', t); } catch (e) { /* ignore */ }
+    paintThemeSwitch();
     chart && chart.refreshTheme();
     xray && xray.refreshTheme();
+    flow && flow.refreshTheme();
     if (state.view === 'chart') renderChart(false);
   }
 
   function currentTheme() {
-    const t = document.documentElement.getAttribute('data-theme');
-    if (t) return t;
-    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+
+  function paintThemeSwitch() {
+    document.querySelectorAll('[data-theme-set]').forEach(b => b.classList.toggle('on', b.dataset.themeSet === currentTheme()));
   }
 
   // ---------- Init ----------
@@ -424,11 +496,16 @@
       if (row) go('chart', row.dataset.sym);
     });
 
-    $('#theme-toggle').addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      chart && chart.refreshTheme();
-      xray && xray.refreshTheme();
+    document.querySelectorAll('[data-theme-set]').forEach(b =>
+      b.addEventListener('click', () => applyTheme(b.dataset.themeSet)));
+    paintThemeSwitch();
+
+    $('#side-toggle').addEventListener('click', () => {
+      const open = document.documentElement.classList.toggle('side-open');
+      try { localStorage.setItem('obs.sidebar', open ? 'open' : 'closed'); } catch (e) { /* ignore */ }
+      requestAnimationFrame(() => flow && flow.draw());
     });
+    initSearch();
 
     refresh();
     state.phase = state.clock.phase;
