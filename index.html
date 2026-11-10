@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OB Scanner — Order Blocks &amp; Liquidity</title>
+  <meta name="description" content="Live order blocks, liquidity scores and market X-Ray for NSE F&amp;O stocks.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Crect x='7' y='17' width='8' height='8' rx='2' fill='%2322c55e'/%3E%3Crect x='17' y='7' width='8' height='8' rx='2' fill='%23fff'/%3E%3Crect x='17' y='17' width='8' height='8' rx='2' fill='%23ffffff88'/%3E%3C/svg%3E">
+  <script>
+    try {
+      var t = localStorage.getItem('obs.theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/boards" aria-label="OB Scanner home">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+        <rect width="32" height="32" rx="8" class="logo-bg"/>
+        <rect x="7" y="17" width="8" height="8" rx="2" class="logo-bull"/>
+        <rect x="17" y="7" width="8" height="8" rx="2" class="logo-fg"/>
+        <rect x="17" y="17" width="8" height="8" rx="2" class="logo-fg dim"/>
+      </svg>
+      <span>OB<b>Scanner</b></span>
+    </a>
+
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <a role="tab" href="#/boards" data-view="boards">Boards</a>
+      <a role="tab" href="#/chart" data-view="chart">Chart</a>
+      <a role="tab" href="#/xray" data-view="xray">Market X-Ray</a>
+      <a role="tab" href="#/journal" data-view="journal">Journal</a>
+    </nav>
+
+    <div class="top-right">
+      <span id="mkt-status" class="pill">Loading…</span>
+      <span id="clock" class="clock mono"></span>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="i-sun" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" width="18" height="18"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="notice">
+    Simulated NSE F&amp;O feed for demonstration. Educational use only. Not investment advice.
+  </div>
+
+  <main>
+    <!-- BOARDS -->
+    <section id="view-boards" class="view" aria-labelledby="t-boards">
+      <h1 id="t-boards" class="sr-only">Liquidity boards</h1>
+      <div class="summary" id="summary"></div>
+      <div class="boards">
+        <article class="board bull">
+          <header class="board-head">
+            <div>
+              <h2><span class="dot"></span>Bullish board</h2>
+              <p>Active bullish order blocks · strongest first</p>
+            </div>
+            <span class="count" id="bull-count">0</span>
+          </header>
+          <div class="table-head">
+            <span>#</span><span>Stock</span><span>LTP</span><span class="c-zone">Order block</span><span class="c-score">Liquidity</span>
+          </div>
+          <div class="rows" id="bull-board"></div>
+        </article>
+        <article class="board bear">
+          <header class="board-head">
+            <div>
+              <h2><span class="dot"></span>Bearish board</h2>
+              <p>Active bearish order blocks · strongest first</p>
+            </div>
+            <span class="count" id="bear-count">0</span>
+          </header>
+          <div class="table-head">
+            <span>#</span><span>Stock</span><span>LTP</span><span class="c-zone">Order block</span><span class="c-score">Liquidity</span>
+          </div>
+          <div class="rows" id="bear-board"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- CHART -->
+    <section id="view-chart" class="view" aria-labelledby="t-chart">
+      <h1 id="t-chart" class="sr-only">Order block chart</h1>
+      <div class="toolbar">
+        <div class="tb-group">
+          <button class="icon-btn" id="sym-prev" type="button" aria-label="Previous stock">‹</button>
+          <select id="sym-select" aria-label="Stock"></select>
+          <button class="icon-btn" id="sym-next" type="button" aria-label="Next stock">›</button>
+        </div>
+        <div class="seg" id="tf-seg" role="group" aria-label="Timeframe">
+          <button type="button" data-tf="1">1m</button>
+          <button type="button" data-tf="5" class="on">5m</button>
+          <button type="button" data-tf="15">15m</button>
+        </div>
+        <div class="tb-group toggles">
+          <label><input type="checkbox" id="opt-zones" checked> Zones</label>
+          <label><input type="checkbox" id="opt-levels" checked> Levels</label>
+          <label><input type="checkbox" id="opt-mitigated"> Mitigated</label>
+          <label><input type="checkbox" id="opt-volume" checked> Volume</label>
+        </div>
+        <div class="tb-group zoom">
+          <button class="icon-btn" id="zoom-out" type="button" aria-label="Zoom out">−</button>
+          <button class="icon-btn" id="zoom-in" type="button" aria-label="Zoom in">+</button>
+          <button class="icon-btn wide" id="zoom-reset" type="button">Reset</button>
+        </div>
+      </div>
+      <div class="chart-layout">
+        <div class="card chart-card">
+          <div class="chart-wrap" id="chart-wrap">
+            <canvas id="price-chart"></canvas>
+            <div class="chart-tip" id="chart-tip" hidden></div>
+          </div>
+          <div class="legend">
+            <span><i class="lg bull-zone"></i>Bullish OB</span>
+            <span><i class="lg bear-zone"></i>Bearish OB</span>
+            <span><i class="lg line res"></i>Resistance</span>
+            <span><i class="lg line sup"></i>Support</span>
+            <span><i class="lg line liq"></i>Liquidity</span>
+            <span class="hint">Scroll to zoom · drag to pan · double-click to reset</span>
+          </div>
+        </div>
+        <aside class="side" id="chart-side"></aside>
+      </div>
+    </section>
+
+    <!-- X-RAY -->
+    <section id="view-xray" class="view" aria-labelledby="t-xray">
+      <h1 id="t-xray" class="sr-only">Market X-Ray</h1>
+      <div class="xray-layout">
+        <div class="card xray-card">
+          <div class="card-head">
+            <div>
+              <h2>Market X-Ray</h2>
+              <p>Each F&amp;O stock by price change (→) and open-interest change (↑). Dot size = liquidity score.</p>
+            </div>
+          </div>
+          <div class="xray-wrap" id="xray-wrap">
+            <canvas id="xray-canvas"></canvas>
+            <div class="chart-tip" id="xray-tip" hidden></div>
+          </div>
+        </div>
+        <aside class="side" id="xray-side"></aside>
+      </div>
+    </section>
+
+    <!-- JOURNAL -->
+    <section id="view-journal" class="view" aria-labelledby="t-journal">
+      <h1 id="t-journal" class="sr-only">Trading journal</h1>
+      <div class="journal-layout">
+        <form class="card journal-form" id="journal-form" autocomplete="off">
+          <div class="card-head"><div><h2>Log a trade</h2><p>Saved in this browser only.</p></div></div>
+          <div class="form-grid">
+            <label>Date<input type="date" name="date" required></label>
+            <label>Stock<select name="sym" id="j-sym" required></select></label>
+            <label>Side
+              <select name="side"><option value="long">Long</option><option value="short">Short</option></select>
+            </label>
+            <label>Qty<input type="number" name="qty" min="1" step="1" required></label>
+            <label>Entry<input type="number" name="entry" step="0.05" min="0" required></label>
+            <label>Stop loss<input type="number" name="sl" step="0.05" min="0" required></label>
+            <label>Target<input type="number" name="target" step="0.05" min="0"></label>
+            <label>Exit<input type="number" name="exit" step="0.05" min="0" placeholder="Open"></label>
+            <label class="span2">Setup
+              <select name="setup">
+                <option>Bullish OB retest</option><option>Bearish OB retest</option>
+                <option>Liquidity sweep</option><option>Breakout</option><option>Other</option>
+              </select>
+            </label>
+            <label class="span2">Notes<textarea name="notes" rows="2" maxlength="500"></textarea></label>
+          </div>
+          <div class="form-actions">
+            <button class="btn ghost" type="button" id="j-fill">Use current chart</button>
+            <button class="btn primary" type="submit">Add trade</button>
+          </div>
+        </form>
+        <div class="journal-main">
+          <div class="summary" id="journal-stats"></div>
+          <div class="card">
+            <div class="card-head">
+              <div><h2>Trades</h2></div>
+              <button class="btn ghost" type="button" id="j-export">Export CSV</button>
+            </div>
+            <div class="table-scroll"><table class="jtable" id="journal-table"></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>OB Scanner · order-block &amp; liquidity analytics</span>
+    <span>Market hours 09:15–15:30 IST · outside hours the last session's close is shown</span>
+  </footer>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/engine.js"></script>
+  <script src="assets/js/chart.js"></script>
+  <script src="assets/js/xray.js"></script>
+  <script src="assets/js/journal.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
