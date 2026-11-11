@@ -2,9 +2,62 @@
 
 A dependency-free web app. It scans NSE F&O stocks for **order blocks**, ranks them on live **Bullish / Bearish boards** by a liquidity score, and plots the whole market on an **OI X-Ray**.
 
-Open `index.html` in a browser. There is no build step and no backend.
+There is no build step, no backend and nothing to install.
 
 > The app ships with a **simulated, deterministic market feed** so it runs anywhere. It is for education only and is not investment advice.
+
+## Quick start
+
+### 1. Clone
+
+```bash
+git clone https://github.com/maddy1357/order-block.git
+cd order-block
+```
+
+No Git? Download the ZIP from the green **Code** button on GitHub and extract it.
+
+### 2. Run
+
+Choose one of these options.
+
+**Option A: open the file directly**
+
+Double-click `index.html`, or open it from the terminal:
+
+```bash
+# Windows
+start index.html
+# macOS
+open index.html
+# Linux
+xdg-open index.html
+```
+
+**Option B: run a local web server (recommended)**
+
+```bash
+# Python 3
+python -m http.server 8080
+# or Node.js
+npx serve -l 8080 .
+```
+
+Then open **http://localhost:8080** in your browser. Stop the server with `Ctrl + C`.
+
+### 3. Use it
+
+| Where | What to do |
+| --- | --- |
+| Sidebar | Switch between Dashboard, Chart, Boards, Market X-Ray and Journal. `»` expands the labels. |
+| `Ctrl K` | Search for a stock, pick it with the arrow keys and Enter, and its chart opens. |
+| Dashboard | Hover a path, tile or card to trace that stock through the flow. Click to open its chart. |
+| Chart | Scroll to zoom, drag to pan, double-click to reset. Switch between 1m, 5m and 15m. |
+| Sun / moon | Switch between light and dark themes. |
+
+Requirements: a recent version of Chrome, Edge, Firefox or Safari. An internet connection is needed only to load the Google Fonts. Without one, the app falls back to system fonts.
+
+Links work by URL hash, for example `#/dashboard`, `#/chart/RELIANCE` or `#/xray`.
 
 ## Features
 
